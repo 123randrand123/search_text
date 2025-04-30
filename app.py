@@ -622,7 +622,6 @@ def app():
                                     st.rerun()
                                 elif (
                                     "PINECONE_API_KEY" not in st.secrets
-                                    or "PINECONE_ENVIRONMENT" not in st.secrets
                                     or "PINECONE_INDEX_NAME" not in st.secrets
                                 ):
                                     st.error(
