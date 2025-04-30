@@ -519,6 +519,7 @@ def app():
                         icon="🧩",
                     )
             else:
+                matches = st.session_state.get("matches_for_current_text", [])
                 st.subheader("💡 2. Keyword Matches & Replacements")
                 st.markdown(
                     """
