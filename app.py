@@ -240,25 +240,41 @@ def app():
         log("Keyword configuration changed, will reprocess.", "info")
 
     if reprocess_keywords or st.session_state.active_keywords_list is None:
-        log(f"Processing keywords (Custom: {current_keyword_mode}).", "debug")
-        # ... (Keyword loading/parsing logic - seems okay) ...
+        log(
+            f"Keyword source changed or first run (Custom: {current_keyword_mode})."
+            " Processing.",
+            "debug",
+        )
         active_keywords = []
         keywords_error_msg = None
         if st.session_state.use_custom_keywords:
             active_keywords = parse_custom_keywords(current_custom_keywords_text)
-            # ... (logging/warnings) ...
+            if not active_keywords:
+                st.warning("Custom keyword list is empty.", icon="⚠️")
+            else:
+                log(f"Using {len(active_keywords)} custom keywords.", "info")
         else:
-            # ... (load default keywords) ...
             if st.session_state.default_keywords_cache is None:
                 st.session_state.default_keywords_cache = load_default_keywords(
                     FERNET_KEY
                 )
             default_result = st.session_state.default_keywords_cache
-            # ... (handle errors/results) ...
-            if isinstance(default_result, list):
-                active_keywords = default_result
-            elif isinstance(default_result, str):
+            if isinstance(default_result, str) and default_result.startswith("ERROR:"):
                 keywords_error_msg = default_result
+                active_keywords = []
+            elif isinstance(default_result, list):
+                active_keywords = default_result
+                if not active_keywords:
+                    st.warning(
+                        "Default keyword list is empty or failed to load.", icon="⚠️"
+                    )
+                else:
+                    log(f"Using {len(active_keywords)} default keywords.", "info")
+            else:
+                keywords_error_msg = (
+                    "ERROR: Unexpected result from load_default_keywords"
+                )
+                active_keywords = []
 
         st.session_state.active_keywords_list = active_keywords
         st.session_state.last_processed_keyword_mode = current_keyword_mode
@@ -339,9 +355,7 @@ def app():
                 key="file_uploader_widget",
             )
             if uploaded_file:
-                file_id = (
-                    f"{uploaded_file.name}-{uploaded_file.size}"
-                )
+                file_id = f"{uploaded_file.name}-{uploaded_file.size}"
                 if file_id != st.session_state.get("last_file_id"):
                     log(f"Processing uploaded file: {uploaded_file.name}", "info")
                     st.session_state.last_file_id = file_id
@@ -366,10 +380,14 @@ def app():
                     st.session_state.current_text = (
                         extracted_text if extracted_text is not None else ""
                     )
-                    text = st.session_state.current_text  # Assign to local 'text' variable
+                    text = (
+                        st.session_state.current_text
+                    )  # Assign to local 'text' variable
                     log("New file detected, finding matches immediately.", "debug")
                     matches = []
-                    active_pattern = st.session_state.pattern_compiled  # Get compiled pattern
+                    active_pattern = (
+                        st.session_state.pattern_compiled
+                    )  # Get compiled pattern
                     if text and active_pattern:  # Check if we have text and a pattern
                         try:
                             matches = [
@@ -377,10 +395,10 @@ def app():
                                     "span": m.span(),
                                     "match_text": m.group(0),
                                     "excerpt": text[
-                                               max(0, m.start() - 50): min(
-                                                   len(text), m.end() + 50
-                                               )
-                                               ],
+                                        max(0, m.start() - 50) : min(
+                                            len(text), m.end() + 50
+                                        )
+                                    ],
                                     "start": m.start(),
                                     "end": m.end(),
                                 }
@@ -388,13 +406,22 @@ def app():
                             ]
                             log(f"Found {len(matches)} matches in new file.", "info")
                         except Exception as e:
-                            logger.error(f"Error during regex finditer for new file: {e}", exc_info=True)
-                            st.error("An error occurred while searching keywords in the new file.")
+                            logger.error(
+                                f"Error during regex finditer for new file: {e}",
+                                exc_info=True,
+                            )
+                            st.error(
+                                "An error occurred while searching keywords in the new file."
+                            )
                     else:
-                        log(f"Skipping match finding for new file (Text empty: {not text}, Pattern invalid: {not active_pattern})",
-                            "debug")
+                        log(
+                            f"Skipping match finding for new file (Text empty: {not text}, Pattern invalid: {not active_pattern})",
+                            "debug",
+                        )
 
-                    st.session_state.matches_for_current_text = matches  # Store matches *before* rerun
+                    st.session_state.matches_for_current_text = (
+                        matches  # Store matches *before* rerun
+                    )
                     # ----------------------------------------------------------
 
                     st.rerun()  # Rerun to update UI with the new text and matches
@@ -402,7 +429,9 @@ def app():
                     # File hasn't changed, use current text
                     text = st.session_state.current_text
                     # Retrieve previously found matches for this text
-                    matches = st.session_state.get("matches_for_current_text", [])  # Default to empty list if not found
+                    matches = st.session_state.get(
+                        "matches_for_current_text", []
+                    )  # Default to empty list if not found
             elif st.session_state.get("last_file_id") is not None:
                 # File was removed
                 log("Uploaded file removed.", "info")
@@ -436,7 +465,11 @@ def app():
                                 {
                                     "span": m.span(),
                                     "match_text": m.group(0),
-                                    "excerpt": text[max(0, m.start() - 50): min(len(text), m.end() + 50)],
+                                    "excerpt": text[
+                                        max(0, m.start() - 50) : min(
+                                            len(text), m.end() + 50
+                                        )
+                                    ],
                                     "start": m.start(),
                                     "end": m.end(),
                                 }
@@ -444,11 +477,18 @@ def app():
                             ]
                             log(f"Found {len(matches)} matches in pasted text.", "info")
                         except Exception as e:
-                            logger.error(f"Error during regex finditer for pasted text: {e}", exc_info=True)
-                            st.error("An error occurred while searching keywords in pasted text.")
+                            logger.error(
+                                f"Error during regex finditer for pasted text: {e}",
+                                exc_info=True,
+                            )
+                            st.error(
+                                "An error occurred while searching keywords in pasted text."
+                            )
                     else:
-                        log(f"Skipping match finding for pasted text (Text empty: {not text}, Pattern invalid: {not active_pattern})",
-                            "debug")
+                        log(
+                            f"Skipping match finding for pasted text (Text empty: {not text}, Pattern invalid: {not active_pattern})",
+                            "debug",
+                        )
 
                     st.session_state.matches_for_current_text = matches
                 else:
@@ -579,6 +619,19 @@ def app():
                                     )
                                     # Rerun needed to show the error message at the top
                                     st.rerun()
+                                elif (
+                                    "PINECONE_API_KEY" not in st.secrets
+                                    or "PINECONE_ENVIRONMENT" not in st.secrets
+                                    or "PINECONE_INDEX_NAME" not in st.secrets
+                                ):
+                                    st.error(
+                                        "Pinecone secrets (API Key, Environment, Index Name) are missing. Cannot use shared suggestions.",
+                                        icon="🚨",
+                                    )
+                                    log(
+                                        "Suggest AI clicked but Pinecone secrets are missing.",
+                                        "error",
+                                    )
                                 else:
                                     st.session_state.show_key_error_on_suggest = False
                                     log(
@@ -594,6 +647,10 @@ def app():
                                         blocked_keywords=st.session_state.active_keywords_list
                                         or [],
                                         api_key=active_mistral_key,
+                                        pinecone_api_key=st.secrets["PINECONE_API_KEY"],
+                                        pinecone_index_name=st.secrets[
+                                            "PINECONE_INDEX_NAME"
+                                        ],
                                     )
                                     # Update state immediately
                                     st.session_state.tasks_pending.add(i)
@@ -814,13 +871,13 @@ def app():
                         f"Polling: Received result for pending match {match_index}.",
                         "debug",
                     )
-                    st.session_state.replacements[match_index] = (
-                        result_data  # Store result string or error dict
-                    )
+                    st.session_state.replacements[match_index] = result_data
                     st.session_state.tasks_pending.remove(match_index)
                     # Default selection for successful AI result to False (user must check the box)
                     if not isinstance(result_data, dict):
                         st.session_state.apply_selection.setdefault(match_index, False)
+                    else:
+                        st.session_state.apply_selection[match_index] = False
                     results_processed_this_run = True
                 else:
                     log(

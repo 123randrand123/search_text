@@ -13,6 +13,8 @@ def suggestion_worker(
     excerpt: str,
     blocked_keywords: list[str],
     api_key: str,
+    pinecone_api_key: str,
+    pinecone_index_name: str,
 ):
     """
     Target function executed in a separate thread to get suggestions.
@@ -30,16 +32,24 @@ def suggestion_worker(
     )
     try:
         # Call the core logic function from tasks.py
-        result = get_valid_replacement(
-            job_id=job_id_for_log,  # Pass the ID for logging within the task
+        result_suggestion = get_valid_replacement(
+            job_id=job_id_for_log,
             full_text=full_text,
             excerpt=excerpt,
             blocked_keywords_list=blocked_keywords,
             api_key_override=api_key,
+            pinecone_api_key=pinecone_api_key,
+            pinecone_index_name=pinecone_index_name,
         )
-        log(f"{thread_name} ({job_id_for_log}): Suggestion successful.", "info")
-        # Put a tuple (index, result_data) into the queue
-        result_q.put((match_index, result))  # Send back the string result
+        if result_suggestion is not None:
+            log(f"{thread_name} ({job_id_for_log}): Suggestion successful.", "info")
+            result_q.put((match_index, result_suggestion))
+        else:
+            log(
+                f"{thread_name} ({job_id_for_log}): Suggestion FAILED for match {match_index}. Core logic returned None.",
+                "error",
+            )
+            result_q.put((match_index, {"error": "Suggestion generation failed."}))
 
     except Exception as e:
         # Log the full exception if possible
@@ -63,6 +73,8 @@ def start_suggestion_thread(
     excerpt: str,
     blocked_keywords: list[str],
     api_key: str,
+    pinecone_api_key: str,
+    pinecone_index_name: str,
 ):
     """Creates and starts the background suggestion thread."""
     thread_name = f"SuggestThread-{match_index}"
@@ -78,6 +90,8 @@ def start_suggestion_thread(
             excerpt,
             blocked_keywords,
             api_key,
+            pinecone_api_key,
+            pinecone_index_name,
         ),
         daemon=True,
         name=thread_name,
